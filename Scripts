@@ -1,0 +1,241 @@
+
+SELECT * FROM dbo.coffee_shop
+
+
+-- 1. Calculate the total number of sales for each month 
+
+SELECT
+CONCAT(ROUND(SUM(unit_price * transaction_qty),0)/1000,'k') AS Total_sales
+FROM dbo.coffee_shop 
+WHERE MONTH(transaction_date) = 3 -- MARCH MONTH 
+
+
+--2.Determine the month-on-month increase or decrease in the number of transactions.
+SELECT 
+Month,
+Sum_transaction,
+CAST((Sum_transaction/Previous_sales * 100) - 100 AS DECIMAL(5,2)) AS Mom_percentage__sales
+FROM
+(
+SELECT 
+CAST(SUM(unit_price * transaction_qty) AS DECIMAL(10,2))AS Sum_transaction,
+LAG(SUM(unit_price * transaction_qty))OVER(ORDER BY MONTH(transaction_date)) AS Previous_sales,
+MONTH(transaction_date) AS Month 
+FROM dbo.coffee_shop
+GROUP BY MONTH(transaction_date)
+)t
+
+
+
+--3 Calculate total number of orders for each month 
+
+SELECT
+COUNT(transaction_id) AS Total_number_order
+FROM dbo.coffee_shop 
+WHERE MONTH(Transaction_date) = 3;
+ 
+ --4 Determine the month-on-month increase or decrease in the number of orders.
+
+SELECT
+months,
+number_of_order,
+previous_order,
+CONCAT(ROUND(
+     ((number_of_order - previous_order) * 100)/previous_order, 2), '%') AS percentage_change
+FROM
+(
+SELECT 
+months,
+number_of_order,
+LAG(number_of_order) OVER(ORDER BY months) AS previous_order
+FROM
+(
+SELECT 
+MONTH(transaction_date) AS months,
+COUNT(transaction_id) AS number_of_order
+FROM dbo.coffee_shop
+GROUP BY MONTH(transaction_date) 
+) t1
+ )t2;
+
+
+-- 5 Total Quantity Sold Analysis : 
+SELECT 
+SUM(transaction_qty) AS Total_quantity  
+FROM dbo.coffee_shop
+WHERE 
+MONTH(transaction_date) = 5 ---May_month
+
+ --6.Determine the month-on-month increase or decrease in the quantity.
+
+
+SELECT
+    months,
+    Total_quantity,
+    CONCAT(CAST((Total_quantity - previous_quatity) * 100 /previous_quatity AS DECIMAL(5,2)),' ','%') AS Percentage_
+FROM 
+(
+ SELECT 
+    months,
+    Total_quantity,
+    LAG(Total_quantity)OVER (ORDER BY months) AS previous_quatity
+ FROM
+(
+ SELECT
+    MONTH(transaction_date) AS months,
+    SUM(transaction_qty) AS Total_quantity
+ FROM dbo.coffee_shop
+    GROUP BY MONTH(transaction_date)
+)t1)t2
+
+-- 7.Finding the key metrics of the store (sales, Orders, Quantity) over a specific date 
+
+SELECT 
+      CONCAT(ROUND(SUM(transaction_qty * unit_price)/1000,1), '' )AS total_sales,
+      CONCAT(CAST(COUNT(transaction_id)/1000.0 AS DECIMAL(3,1)), 'k') AS Total_order,
+      CONCAT(CAST(SUM(transaction_qty)/1000.0 AS DECIMAL(3,1)), 'k') AS Total_qty_sold
+FROM dbo.coffee_shop
+      WHERE transaction_date = '2023-03-27'
+
+
+
+--8. Sales Analysis by weekdays and Weekends:
+
+SELECT 
+    CASE WHEN DATEPART(weekday,transaction_date)IN (1,7) THEN 'Weekends'
+         ELSE 'Weekdays'
+END AS day_of_week,
+      CONCAT(ROUND(SUM(transaction_qty * unit_price)/1000,1), 'k' )AS total_sales
+FROM dbo.coffee_shop
+    WHERE MONTH(transaction_date) = 2
+GROUP BY CASE WHEN DATEPART(weekday,transaction_date)IN (1,7) THEN 'Weekends'
+         ELSE 'Weekdays'
+END
+
+
+
+-- 9. Sales Analysis by store location:
+
+SELECT 
+store_location,
+CONCAT(ROUND(SUM(transaction_qty * unit_price)/1000,1), 'k') AS total_sales 
+FROM dbo.coffee_shop
+WHERE MONTH(transaction_date) = 5 
+GROUP BY store_location
+ORDER BY total_sales DESC
+
+--10. Daily Sales Analysis with Average Line 
+ 
+
+
+ SELECT 
+    CONCAT(ROUND(AVG(Total_sales)/1000,1),'k') AS Avg_sales
+ FROM(
+ SELECT 
+ month(transaction_date) AS months,
+ SUM(transaction_qty * unit_price) AS Total_sales 
+ FROM dbo.coffee_shop 
+ WHERE month(transaction_date) = 5
+ GROUP BY transaction_date
+)t;
+
+--11. Daily Average sales 
+
+SELECT 
+Day_of_month,
+CASE 
+    WHEN Total_sales > Avg_sales THEN 'Above Average'
+    WHEN Total_sales < Avg_sales THEN 'Below Average'
+    ELSE 'Average'
+END AS sales_status,
+total_sales 
+FROM(
+SELECT 
+    DAY(transaction_date) AS Day_of_month,
+    SUM(transaction_qty * unit_price) AS Total_sales,
+    AVG(SUM(transaction_qty * unit_price)) OVER()AS Avg_sales
+    FROM dbo.coffee_shop 
+WHERE Month(transaction_date) = 5
+GROUP BY DAY(transaction_date)
+ )t
+ ORDER BY Day_of_month
+
+--12. Sales Analysis by Product Category 
+
+SELECT 
+    product_category,
+    CONCAT(ROUND(SUM(transaction_qty * unit_price)/1000,1),'K') AS Total_sales 
+FROM dbo.coffee_shop 
+WHERE MONTH(transaction_date) = 5
+GROUP BY product_category
+ORDER BY Total_sales DESC
+
+
+
+--13. Total 10 product by sales 
+
+SELECT TOP 10
+    product_type,
+    ROUND(SUM(transaction_qty * unit_price),2) AS Total_sales 
+FROM dbo.coffee_shop 
+WHERE MONTH(transaction_date) = 5
+GROUP BY product_type
+ORDER BY SUM(transaction_qty * unit_price) DESC
+
+
+
+--14. Sales Analysis by days and hours 
+
+SELECT 
+    SUM(transaction_qty * unit_price) AS Total_sales,
+    SUM(transaction_qty) AS Total_qty_sold,
+    COUNT(*) AS Total_orders
+FROM dbo.coffee_shop 
+WHERE DATEPART(month,transaction_date) = 5 -- May month
+AND DATEPART(weekday,transaction_date) = 1 -- Sunday
+AND DATEPART(HOUR,transaction_time) = 14 -- Hour No 14
+
+
+
+SELECT 
+    DATEPART(HOUR,transaction_time) AS HOURS_,
+    ROUND(SUM(transaction_qty * unit_price),1)AS Total_sales
+FROM dbo.coffee_shop 
+WHERE DATEPART(month,transaction_date) = 5 -- May month AND 
+GROUP BY DATEPART(HOUR,transaction_time)
+ORDER BY 
+ROUND(SUM(transaction_qty * unit_price),1) DESC  
+
+
+SELECT 
+     CASE WHEN DATEPART(weekday ,transaction_date)= 2 THEN 'Monday'
+          WHEN DATEPART(weekday ,transaction_date)= 3 THEN 'Tuesday'
+          WHEN DATEPART(weekday ,transaction_date)= 4 THEN 'Wednesday'
+          WHEN DATEPART(weekday ,transaction_date)= 5 THEN 'Thursday'
+          WHEN DATEPART(weekday ,transaction_date)= 6 THEN 'Friday'
+          WHEN DATEPART(weekday ,transaction_date)= 7 THEN 'Saturday'
+          ELSE 'Sunday'
+     END AS Week_day,
+     ROUND(SUM(transaction_qty * unit_price),1)AS Total_sales
+FROM dbo.coffee_shop 
+WHERE DATEPART(month,transaction_date) = 5 -- May month 
+GROUP BY      CASE WHEN DATEPART(weekday ,transaction_date)= 2 THEN 'Monday'
+          WHEN DATEPART(weekday ,transaction_date)= 3 THEN 'Tuesday'
+          WHEN DATEPART(weekday ,transaction_date)= 4 THEN 'Wednesday'
+          WHEN DATEPART(weekday ,transaction_date)= 5 THEN 'Thursday'
+          WHEN DATEPART(weekday ,transaction_date)= 6 THEN 'Friday'
+          WHEN DATEPART(weekday ,transaction_date)= 7 THEN 'Saturday'
+          ELSE 'Sunday'
+     END  
+ORDER BY   ROUND(SUM(transaction_qty * unit_price),1) DESC 
+
+-- Another query without using CASE WHEN Statement 
+
+SELECT 
+    DATENAME(weekday, transaction_date) AS Week_day,
+    ROUND(SUM(transaction_qty * unit_price), 1) AS Total_sales
+FROM dbo.coffee_shop 
+WHERE DATEPART(month, transaction_date) = 5 -- May month 
+GROUP BY DATENAME(weekday, transaction_date)
+ORDER BY Total_sales DESC;
+
